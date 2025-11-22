@@ -132,6 +132,13 @@ export const MilkdownEditor: React.FC<MilkdownEditorProps> = ({ content, onChang
                 <ToolbarButton icon="↪" label="Redo" onClick={() => run(redoCommand.key)} />
             </div>
             <div style={{ flex: 1, overflow: 'auto', background: 'var(--vscode-editor-background)' }}>
+                <style>
+                    {`
+            .milkdown .ProseMirror {
+              outline: none !important;
+            }
+          `}
+                </style>
                 <Milkdown />
             </div>
         </div>
