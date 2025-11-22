@@ -31,7 +31,6 @@ const App: React.FC = () => {
     return (
         <MilkdownProvider>
             <div style={{ padding: '20px', fontFamily: 'sans-serif', height: '100vh', display: 'flex', flexDirection: 'column' }}>
-                <h1>Markdown WYSIWYG</h1>
                 <div style={{ flex: 1, overflow: 'auto', border: '1px solid #ccc' }}>
                     {/* Key forces re-render when content changes from outside to ensure editor updates */}
                     <MilkdownEditor content={text} onChange={handleChange} />

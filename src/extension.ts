@@ -1,27 +1,29 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('Markdown WYSIWYG Editor is now active!');
+    console.log('Congratulations, your extension "vscode-markdown-wysiwyg-editor" is now active!');
 
     let disposable = vscode.commands.registerCommand('markdown-wysiwyg.openEditor', () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
-            vscode.window.showErrorMessage('No active text editor');
+            vscode.window.showErrorMessage('No active editor found');
             return;
         }
 
         const document = editor.document;
         const panel = vscode.window.createWebviewPanel(
             'markdownWysiwyg',
-            'Markdown WYSIWYG',
+            `[WYSIWYG] ${path.basename(editor.document.fileName)}`,
             vscode.ViewColumn.Beside,
             {
                 enableScripts: true,
-                localResourceRoots: [
-                    vscode.Uri.joinPath(context.extensionUri, 'out')
-                ]
+                retainContextWhenHidden: true,
+                localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'out'))]
             }
         );
+
+        panel.iconPath = new vscode.ThemeIcon('preview') as any;
 
         const scriptUri = panel.webview.asWebviewUri(
             vscode.Uri.joinPath(context.extensionUri, 'out', 'webview.js')
