@@ -12,10 +12,16 @@
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
-    "commands": [
+    "customEditors": [
       {
-        "command": "markdown-wysiwyg.openEditor",
-        "title": "Markdown WYSIWYG: Open Editor"
+        "viewType": "markdownWysiwyg.editor",
+        "displayName": "Markdown WYSIWYG Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          }
+        ],
+        "priority": "option"
       }
     ]
   },

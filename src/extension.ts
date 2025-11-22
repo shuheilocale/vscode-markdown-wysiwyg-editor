@@ -2,77 +2,104 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('Congratulations, your extension "vscode-markdown-wysiwyg-editor" is now active!');
+    console.log('Markdown WYSIWYG Editor is now active!');
 
-    let disposable = vscode.commands.registerCommand('markdown-wysiwyg.openEditor', () => {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor) {
-            vscode.window.showErrorMessage('No active editor found');
-            return;
-        }
-
-        const document = editor.document;
-        const panel = vscode.window.createWebviewPanel(
-            'markdownWysiwyg',
-            `[WYSIWYG] ${path.basename(editor.document.fileName)}`,
-            vscode.ViewColumn.Beside,
-            {
-                enableScripts: true,
+    const provider = new MarkdownWysiwygEditorProvider(context);
+    const registration = vscode.window.registerCustomEditorProvider(
+        'markdownWysiwyg.editor',
+        provider,
+        {
+            webviewOptions: {
                 retainContextWhenHidden: true,
-                localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'out'))]
-            }
+            },
+            supportsMultipleEditorsPerDocument: false,
+        }
+    );
+
+    context.subscriptions.push(registration);
+}
+
+class MarkdownWysiwygEditorProvider implements vscode.CustomTextEditorProvider {
+    constructor(private readonly context: vscode.ExtensionContext) { }
+
+    public async resolveCustomTextEditor(
+        document: vscode.TextDocument,
+        webviewPanel: vscode.WebviewPanel,
+        _token: vscode.CancellationToken
+    ): Promise<void> {
+        webviewPanel.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [vscode.Uri.file(path.join(this.context.extensionPath, 'out'))]
+        };
+
+        webviewPanel.title = `[WYSIWYG] ${path.basename(document.fileName)}`;
+        webviewPanel.iconPath = new vscode.ThemeIcon('preview') as any;
+
+        const scriptUri = webviewPanel.webview.asWebviewUri(
+            vscode.Uri.joinPath(this.context.extensionUri, 'out', 'webview.js')
         );
 
-        panel.iconPath = new vscode.ThemeIcon('preview') as any;
+        webviewPanel.webview.html = this.getWebviewContent(webviewPanel.webview, scriptUri);
 
-        const scriptUri = panel.webview.asWebviewUri(
-            vscode.Uri.joinPath(context.extensionUri, 'out', 'webview.js')
-        );
-
-        panel.webview.html = getWebviewContent(panel.webview, scriptUri);
-
-        // Send initial content
-        panel.webview.postMessage({
+        // Send initial content to webview
+        webviewPanel.webview.postMessage({
             type: 'update',
             text: document.getText()
         });
 
-        // Handle messages from the webview
-        panel.webview.onDidReceiveMessage(
-            message => {
-                switch (message.type) {
-                    case 'updateText':
-                        const edit = new vscode.WorkspaceEdit();
-                        const fullRange = new vscode.Range(
-                            document.positionAt(0),
-                            document.positionAt(document.getText().length)
-                        );
-                        edit.replace(document.uri, fullRange, message.text);
-                        vscode.workspace.applyEdit(edit);
-                        return;
-                }
-            },
-            undefined,
-            context.subscriptions
-        );
-
-        // Listen for document changes
+        // Handle document changes (from VS Code)
         const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
             if (e.document.uri.toString() === document.uri.toString()) {
-                panel.webview.postMessage({
+                webviewPanel.webview.postMessage({
                     type: 'update',
-                    text: e.document.getText()
+                    text: document.getText()
                 });
             }
         });
 
-        // Clean up when the panel is closed
-        panel.onDidDispose(() => {
-            changeDocumentSubscription.dispose();
-        }, null, context.subscriptions);
-    });
+        // Handle messages from webview
+        webviewPanel.webview.onDidReceiveMessage(
+            message => {
+                switch (message.type) {
+                    case 'updateText':
+                        this.updateTextDocument(document, message.text);
+                        return;
+                }
+            }
+        );
 
-    context.subscriptions.push(disposable);
+        webviewPanel.onDidDispose(() => {
+            changeDocumentSubscription.dispose();
+        });
+    }
+
+    private updateTextDocument(document: vscode.TextDocument, text: string) {
+        const edit = new vscode.WorkspaceEdit();
+        edit.replace(
+            document.uri,
+            new vscode.Range(0, 0, document.lineCount, 0),
+            text
+        );
+        vscode.workspace.applyEdit(edit);
+    }
+
+    private getWebviewContent(webview: vscode.Webview, scriptUri: vscode.Uri): string {
+        const nonce = getNonce();
+
+        return `<!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+            <title>Markdown WYSIWYG Editor</title>
+        </head>
+        <body>
+            <div id="root"></div>
+            <script nonce="${nonce}" src="${scriptUri}"></script>
+        </body>
+        </html>`;
+    }
 }
 
 function getNonce() {
@@ -82,24 +109,6 @@ function getNonce() {
         text += possible.charAt(Math.floor(Math.random() * possible.length));
     }
     return text;
-}
-
-function getWebviewContent(webview: vscode.Webview, scriptUri: vscode.Uri) {
-    const nonce = getNonce();
-
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Markdown WYSIWYG</title>
-</head>
-<body>
-    <div id="root"></div>
-    <script nonce="${nonce}" src="${scriptUri}"></script>
-</body>
-</html>`;
 }
 
 export function deactivate() { }
